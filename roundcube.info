@@ -1,0 +1,6 @@
+; $Id$
+name = RoundCube IMAP Mail Client
+description = Wraps the RoundCube IMAP Webmail Client in an iframe on your Drupal site
+package = Mail
+version = "6.x-1.0"
+core = "6.x"

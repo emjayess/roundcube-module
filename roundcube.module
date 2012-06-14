@@ -1,0 +1,219 @@
+<?php
+
+define('RC_MAIL_SRC', 'http://mail.mac');
+
+function roundcube_access() {
+  return TRUE;
+}
+function user_is_roundcube_user() {
+  return roundcube_access();
+}
+function user_is_roundcube_admin() {
+  return roundcube_access();
+}
+
+function roundcube_menu() {
+  $items = array();
+  
+  // path
+  $items['roundcube'] = array(
+    'type'            => MENU_CALLBACK,
+    'page callback'   => 'roundcube_page',
+    'access callback' => 'user_is_roundcube_user'
+  );
+  
+  // settings
+  $items['admin/settings/roundcube'] = array(
+    'type'            => MENU_NORMAL_ITEM,
+    'title'           => 'Roundcube Mail Settings',
+    'description'     => 'Set up the location of your Roundcube&trade; IMAP webmail installation',
+    'page callback'   => 'drupal_get_form',
+    'page arguments'  => array('roundcube_admin_settings'),
+    'access callback' => 'user_is_roundcube_admin'
+  );
+  
+  return $items;
+}
+
+/**
+ * mail_page
+ */
+function roundcube_page() {
+  $path = drupal_get_path('module', 'roundcube');
+  drupal_add_css($path . '/roundcube.css');
+  drupal_add_js($path . '/roundcube.js');
+  
+  $mail_src = variable_get('roundcube_mail_src', RC_MAIL_SRC);
+  return roundcube_mail_iframe($mail_src);
+}
+
+function roundcube_mail_iframe($src, $width='100%', $height='600px', $name='roundcube') {
+  return <<<EOHTML
+  <iframe src=$src
+          name="$name"
+          align="left"
+          width="$width"
+          height="$height"
+          scrolling="no"
+          frameborder="1"
+  ></iframe>
+EOHTML;
+}
+
+function roundcube_mail_iframe_admin_preview($src, $width='100%', $height='600px', $name='roundcube_preview') {
+  return <<<EOHTML
+  <iframe src=$src
+          name="$name"
+          align="right"
+          width="$width"
+          height="$height"
+          scrolling="auto"
+          frameborder="1"
+          style="top:0px;left:0px;"
+  ></iframe>
+EOHTML;
+}
+
+function roundcube_admin_settings() {
+  global $base_url;
+  
+  /**
+   * Roundcube Location/Path Settings
+   */
+  $form['settings'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Locations and Paths',
+    '#collapsible' => TRUE,
+    '#collapsed'  => FALSE,
+  );
+  $mail_src = variable_get('roundcube_mail_src', 'http://');
+  $form['settings']['roundcube_mail_src'] = array(
+    '#type'          => 'textfield',
+    '#size'          => 50,
+    '#title'         => 'Roundcube Installation URL',
+    '#description'   => 'The <strong>Roundcube</strong> webmail client is loaded into a standard HTML <code>iframe</code> element within your Drupal website, and here you will set the "src=" attribute of the <code>iframe</code>. This will be the web (http) location of your <strong>Roundcube</strong> IMAP webmail client installation (e.g. <code>http://mail.example.com</code>)',
+    '#default_value' => $mail_src,
+    '#attributes' => array('style' => 'font-family:Courier, monospace;padding:3px;'),
+  );
+  
+  $default_mail_link = l("$base_url/roundcube", "$base_url/roundcube");
+  $mail_alias = variable_get('roundcube_mail_path', "mail");
+  $form['settings']['roundcube_mail_path'] = array(
+    '#type'          => 'textfield',
+    '#size'          => 30,
+    '#title'         => 'Desired Webmail Path (on this site)',
+    '#description'   => "Enter the path you would like to use on this Drupal site to access your <strong>Roundcube</strong> webmail interface. By default, this is $default_mail_link. You may enter an alternative path, and this module will attempt to set up a <em>path alias</em> using whatever path you might prefer, such as: $base_url/mail.",
+    '#default_value' => $mail_alias,
+    '#field_prefix'  => "<code>$base_url/</code>",
+    '#attributes' => array('style' => 'font-family:Courier, monospace;padding:3px;'),
+  );
+    
+  $form['settings']['style'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Iframe Attributes',
+    '#description' => '<em>Define the HTML attributes for the <strong>Roundcube</strong> <code>iframe</code></em>',
+    '#collapsible' => TRUE,
+    '#collapsed'  => TRUE,
+  );
+  $form['settings']['style']['iframe'] = array(
+    '#type' => 'select',
+    '#title' => 'frameborder',
+    '#options' => array('0' => 'No (0)', '1' => 'Yes (1)'),
+  );
+    
+  // Show a Preview to confirm correct settings?
+  if (valid_url($mail_src, TRUE) && $mail_src != 'http://') {
+    $rc_link = l($mail_src, $mail_src);
+    $local_link = l("$base_url/$mail_alias","$base_url/$mail_alias");
+    
+    $form['settings']['preview'] = array(
+      '#type'        => 'fieldset',
+      '#title'       => 'Live Previews',
+      '#description' => "If your settings are correct, you should see the original webmail interface of your <strong>Roundcube</strong> installation in the left-hand preview (<code>$rc_link</code>), and see that same interface embedded into your Drupal website in the right-hand preview (<code>$local_link</code>). If one or both of these previews is not working, you have a problem with your settings.",
+      '#collapsible' => TRUE,
+      '#collapsed'   => TRUE,
+    );
+
+    $form['settings']['preview']['roundcube_src'] = array(
+      '#type' => 'markup',
+      '#value' => roundcube_mail_iframe($mail_src, '48%', '350px'),
+    );
+
+    $form['settings']['preview']['roundcube_path'] = array(
+      '#type' => 'markup',
+      '#value' => roundcube_mail_iframe_admin_preview("$base_url/$mail_alias", '48%', '350px'),
+    );
+  }
+  
+  /**
+   * Roundcube Authentication Settings
+   */
+  $form['auth'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Authentication Settings',
+    '#description' => '<em>(Custom <strong>Roundcube</strong> authentication not yet implemented -- but this is a high priority feature, so stay tuned!...)</em>',
+    '#collapsible' => TRUE,
+    '#collapsed'  => TRUE,
+  );
+  $form['auth']['settings'] = array(
+    '#type' => 'radios',
+    '#title' => 'Authentication Method',
+    '#options' => array('Default (must log in to Roundcube webmail)', 'Drupal - attempt login form submission with currently logged in Drupal user credentials', 'Drupal - XML-RPC', 'LDAP Integration', 'Other'),
+    '#disabled' => TRUE,
+    '#description' => 'not yet implemented',
+    '#default_value' => 0,
+  );
+  
+  $form['menu'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Menu Settings',
+    '#description' => '<em>(Custom <strong>Drupal/Roundcube</strong> menu settings not yet implemented.)</em>',
+    '#collapsible' => TRUE,
+    '#collapsed'  => TRUE,
+  );
+  
+  $form['block'] = array(
+    '#type' => 'fieldset',
+    '#title' => 'Block Settings',
+    '#description' => '<em>(Custom block settings not yet implemented.)</em>',
+    '#collapsible' => TRUE,
+    '#collapsed'  => TRUE,
+  );
+  return system_settings_form($form);
+}
+
+function roundcube_admin_settings_validate($form, $form_state) {
+  global $base_url;
+  $mail_src = $form_state['values']['roundcube_mail_src'];
+  $mail_path = $form_state['values']['roundcube_mail_path'];  
+
+  // validate roundcube URL
+  if (!valid_url(check_url($mail_src), TRUE)) {
+    form_set_error(
+      'roundcube_mail_src', 
+      'The address or your webmail client must be a valid web (http) URL.'
+    );
+  }
+  
+  // validate desired path alias for webmail
+  if (!check_plain($mail_path)) {
+    form_set_error(
+      'roundcube_mail_path', 
+      'Please enter your desired path using only lowercase letters, numbers, and underscores, for example: <code>my_custom_path</code>, or simply <code>mail</code>'
+    );
+  }
+  else {
+    // check for a collision with already registered paths
+    if (!path_load($mail_path)) {
+      path_set_alias('roundcube', $mail_path);
+      $mail_link = l("$base_url/$mail_path", "$base_url/$mail_path");
+      drupal_set_message("Your desired path alias has been set up. You may now access your webmail at: $mail_link");
+    }
+    else {
+      form_set_error(
+        'roundcube_mail_path', 
+        'Your desired path alias for webmail on this site is not available; Please choose an alternative.'
+      );    
+    }
+  }
+}
